@@ -103,13 +103,14 @@ app.post('/test', (req, res) => {
             bussy = false
             console.log(response)
         }).catch(error=>{
+            bussy = false
             console.log(error)
         })
     }
 })
 
 app.get('/', (req,res)=>{
-    res.status(201).send(`Server is working, bussy: ${bussy}`)
+    res.status(201).send(new Date().toISOString().replace(/T/, ' ').replace(/\..+/, '')+` - Server is working, bussy: ${bussy}`)
 })
 
 app.listen(config.port, () => {
