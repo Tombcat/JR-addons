@@ -109,7 +109,7 @@ app.post('/test', (req, res) => {
 })
 
 app.get('/', (req,res)=>{
-    es.status(201).res.send(`Server is working, bussy: ${bussy}`)
+    res.status(201).res.send(`Server is working, bussy: ${bussy}`)
 })
 
 app.listen(config.port, () => {
