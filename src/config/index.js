@@ -4,10 +4,13 @@ import dotenv from 'dotenv';
 process.env.NODE_ENV = process.env.NODE_ENV || 'development';
 
 const envFound = dotenv.config();
-if (envFound.error) {
-  // This error should crash whole process
+let envs;
 
-  throw new Error("⚠️  Couldn't find .env file  ⚠️");
+if (!('error' in envFound)) {
+  envs = envFound.parsed;
+} else {
+  envs = {};
+  _.each(process.env, (value, key) => envs[key] = value);
 }
 
 export default {

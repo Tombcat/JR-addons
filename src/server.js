@@ -95,7 +95,7 @@ function fetchReezo(data){
 
 app.post('/test', (req, res) => {
     if(bussy){
-        res.send("Server is currently bussy, please try again later")
+        res.status(201).res.send("Server is currently bussy, please try again later")
     }else {
         res.status(202).send("Accepted, in progress!")
         bussy = true
@@ -109,7 +109,7 @@ app.post('/test', (req, res) => {
 })
 
 app.get('/', (req,res)=>{
-    res.send(`Server is working, bussy: ${bussy}`)
+    es.status(201).res.send(`Server is working, bussy: ${bussy}`)
 })
 
 app.listen(config.port, () => {
