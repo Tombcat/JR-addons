@@ -6,12 +6,14 @@ import config from './config/index.js';
 import bodyParser from 'body-parser';
 
 const pool = new Pool({
-  user: "michelle",
-  database: "zencars",
-  password: "JustRent2021!",
-  port: 5432,
-  host: "db-sandbox2.cu6ycwny8ckg.eu-west-1.rds.amazonaws.com",
+  user: config.pg.user,
+  database: config.pg.database,
+  password: config.pg.password,
+  port: config.pg.port,
+  host: config.pg.host,
 });
+
+let bussy = false;
 
 const app = express()
 app.use(bodyParser.urlencoded({ extended: true }));
@@ -33,12 +35,13 @@ const scrapeReezo = async function(client, scrape) {
             values: [el.brand,el.model,el.mileage,el.price,el.year]
         }
     
-        await runQuery(client, query).then(result=>{
-            if (result.rows.length !== 0) continue
-            
+        const length = await runQuery(client, query).then(result=>{
+            return result.rows.length
         }).catch(e => {
             console.error(el, e.message, e.stack)
         })
+
+        if(length !== 0) continue
     
         query = {
             text: "INSERT INTO reezocar_scrapes (reezo_id, title, brand, model, energy, gearbox, mileage, price, year) \
@@ -91,16 +94,22 @@ function fetchReezo(data){
 }
 
 app.post('/test', (req, res) => {
-    res.status(202).send("Accepted, in progress!")
-    looper(req.body).then((response)=>{
-        console.log(response)
-    }).catch(error=>{
-        console.log(error)
-    })
+    if(bussy){
+        res.send("Server is currently bussy, please try again later")
+    }else {
+        res.status(202).send("Accepted, in progress!")
+        bussy = true
+        looper(req.body).then((response)=>{
+            bussy = false
+            console.log(response)
+        }).catch(error=>{
+            console.log(error)
+        })
+    }
 })
 
 app.get('/', (req,res)=>{
-    res.send("Working")
+    res.send(`Server is working, bussy: ${bussy}`)
 })
 
 app.listen(config.port, () => {
