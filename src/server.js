@@ -102,7 +102,7 @@ const getSimilar = async (src) => {
     let query = {
         text: "SELECT * FROM public.vehicle_revisions WHERE id IN (SELECT last_revision FROM public.vehicles WHERE id = $1)",
         values: [src]
-    } 
+    }
 
     //Run query to get original car values and store it as ORG
     const org = await runQuery(client, query).then(result=>{
@@ -134,7 +134,8 @@ const getSimilar = async (src) => {
             AND configuration->>'seats' like $3 \
             AND configuration->>'fuel' like $4 \
             AND configuration->>'gear' like $5 \
-            AND configuration->>'critair' like $6",
+            AND configuration->>'critair' like $6 \
+            Limit 12",
         values: [org.configuration.type, org.configuration.doors, org.configuration.seats, org.configuration.fuel, org.configuration.gear, org.configuration.critair]
     }
 
@@ -156,7 +157,8 @@ const getSimilar = async (src) => {
                 and configuration->>'type' like $1 \
                 AND configuration->>'fuel' like $2 \
                 AND configuration->>'gear' like $3 \
-                AND configuration->>'critair' like $4",
+                AND configuration->>'critair' like $4 \
+                Limit 12",
             values: [org.configuration.type, org.configuration.fuel, org.configuration.gear, org.configuration.critair]
         }
         list = list.concat(await runQuery(client, query).then(result=>{
@@ -164,7 +166,16 @@ const getSimilar = async (src) => {
         }).catch(e => {
             console.error(e.message, e.stack)
         }))
-    } 
+    }
+
+    const orgOffer = findOffer(org.offers)
+
+    //sort by price
+    if(orgOffer && list){
+        list.sort((a, b) => {
+            return (findOffer(a.offers) - orgOffer) - (findOffer(b.offers) - orgOffer);
+        });
+    }
 
     //If we have less than 3 similar vehicles, trim data to only the same type.
     if(list.length < 3){
@@ -172,7 +183,8 @@ const getSimilar = async (src) => {
             text: "SELECT vr.* FROM public.vehicle_revisions vr WHERE id IN \
                     (SELECT last_revision FROM public.vehicles) \
                 AND status = 'available'\
-                and configuration->>'type' like $1",
+                and configuration->>'type' like $1 \
+                limit 5",
             values: [org.configuration.type]
         }
         list = list.concat(await runQuery(client, query).then(result=>{
@@ -184,15 +196,6 @@ const getSimilar = async (src) => {
 
     client.release()
     console.log("Client disconnected")
-
-    const orgOffer = findOffer(org.offers)
-
-    //sort by price
-    if(orgOffer){
-        list.sort((a, b) => {
-            return (findOffer(a.offers) - orgOffer) - (findOffer(b.offers) - orgOffer);
-        });
-    }
 
     //Trim to 12 elements
     list = list.slice(0, 12);
