@@ -24,6 +24,7 @@ const runQuery = async function (client, query) {
       var result = await client.query(query.text, query.values)
       return result
     } catch (e) {
+        console.log(e)
         throw new Error('error while fetching query');
     } finally {
         
@@ -112,11 +113,36 @@ const getSimilar = async (src) => {
         if(offer){
             return offer.price
         }else {
-            offer = array.find(element=> element.duration == org.offers[0].duration)
+            offer = array.find(element=> element.duration == org.offers[1].duration)
             if(offer){
                 return offer.price
             }else return undefined
         }
+    }
+
+    const orgOffer = findOffer(org.offers)
+
+    const sortByPrice = (array)=>{
+        //sort by price
+        if(orgOffer && array.length !== 0){
+            array.sort((a, b) => {
+                return (findOffer(a.offers) - orgOffer) - (findOffer(b.offers) - orgOffer);
+            });
+            return array
+        }else return array
+    }
+
+    const excludeId = (array)=>{
+        //Make array of excluded IDS from select query
+        let list = []
+        if(array){
+            list = array.map(e=>{
+                return e.vehicle_id
+            })
+        }
+
+        list.push(org.vehicle_id)
+        return list
     }
 
     //Prepare query for a similar cars search
@@ -124,14 +150,15 @@ const getSimilar = async (src) => {
         text: "SELECT vr.* FROM public.vehicle_revisions vr WHERE id IN \
                 (SELECT last_revision FROM public.vehicles) \
             AND status = 'available'\
-            and configuration->>'type' like $1 \
-            AND configuration->>'doors' like $2  \
-            AND configuration->>'seats' like $3 \
-            AND configuration->>'fuel' like $4 \
-            AND configuration->>'gear' like $5 \
-            AND configuration->>'critair' like $6 \
+            AND vr.vehicle_id != $1 \
+            and configuration->>'type' like $2 \
+            AND configuration->>'doors' like $3  \
+            AND configuration->>'seats' like $4 \
+            AND configuration->>'fuel' like $5 \
+            AND configuration->>'gear' like $6 \
+            AND configuration->>'critair' like $7 \
             Limit 12",
-        values: [org.configuration.type, org.configuration.doors, org.configuration.seats, org.configuration.fuel, org.configuration.gear, org.configuration.critair]
+        values: [org.vehicle_id, org.configuration.type, org.configuration.doors, org.configuration.seats, org.configuration.fuel, org.configuration.gear, org.configuration.critair]
     }
 
     let list = []
@@ -143,14 +170,12 @@ const getSimilar = async (src) => {
         console.error(e.message, e.stack)
     }))
 
-    const orgOffer = findOffer(org.offers)
+    //Sort result and set excluded IDS
+    list = sortByPrice(list)
+    let excludedIds = excludeId(list)
 
-    //sort by price
-    if(orgOffer && list){
-        list.sort((a, b) => {
-            return (findOffer(a.offers) - orgOffer) - (findOffer(b.offers) - orgOffer);
-        });
-    }
+    console.log("List Length with Similar:", list.length)
+    console.log("1nd run excluded:", excludedIds, '\n')
 
     //Delete doors and seats
     if(list.length < 6){
@@ -161,26 +186,25 @@ const getSimilar = async (src) => {
                 and configuration->>'type' like $1 \
                 AND configuration->>'fuel' like $2 \
                 AND configuration->>'gear' like $3 \
-                AND configuration->>'critair' like $4 \
-                Limit "+12-list.length,
-            values: [org.configuration.type, org.configuration.fuel, org.configuration.gear, org.configuration.critair]
+                AND NOT vehicle_id = ANY($4::uuid[]) \
+                Limit $5",
+            values: [org.configuration.type, org.configuration.fuel, org.configuration.gear, excludedIds, 12-list.length]
         }
-        const lessSimilar = await runQuery(client, query).then(result=>{
+
+        let lessSimilar = await runQuery(client, query).then(result=>{
             return result.rows
         }).catch(e => {
             console.error(e.message, e.stack)
         })
-
-        if(orgOffer && lessSimilar){
-            lessSimilar.sort((a, b) => {
-                return (findOffer(a.offers) - orgOffer) - (findOffer(b.offers) - orgOffer);
-            });
-        }
-
+        //Sort result and set excluded IDS
+        
+        lessSimilar = sortByPrice(lessSimilar)
         list = list.concat(lessSimilar)
+        excludedIds = excludeId(list)
     }
 
-    
+    console.log("List Length with lessSimilar:", list.length)
+    console.log("2rd run excluded:", excludedIds,)
 
     //If we have less than 3 similar vehicles, trim data to only the same type.
     if(list.length < 3){
@@ -188,28 +212,34 @@ const getSimilar = async (src) => {
             text: "SELECT vr.* FROM public.vehicle_revisions vr WHERE id IN \
                     (SELECT last_revision FROM public.vehicles) \
                 AND status = 'available'\
-                and configuration->>'type' like $1 \
-                limit "+3-list.length,
-            values: [org.configuration.type]
+                AND NOT vehicle_id = ANY($1::uuid[]) \
+                and configuration->>'type' like $2 \
+                limit $3",
+            values: [excludedIds, org.configuration.type, 12-list.length]
         }
-        list = list.concat(await runQuery(client, query).then(result=>{
+
+        let otherVehicles = await runQuery(client, query).then(result=>{
             return result.rows
         }).catch(e => {
             console.error(e.message, e.stack)
-        }))
+        })
+
+        otherVehicles = sortByPrice(otherVehicles)
+        list = list.concat(otherVehicles)
     }
 
     client.release()
     console.log("Client disconnected")
 
     return {
-        found: list.length,
-        rows: list
+        size: list.length,
+        original: org,
+        vehicles: list
     }
 }
 
 app.get('/similar/:id', (req, res) => {
-    console.log("Requested similar cars to id:", req.params.id)
+    console.log('\n',"Requested similar cars to id:", req.params.id)
     getSimilar(req.params.id).then(result=>{
         res.status(200).send(result)
     }).catch(e => {
