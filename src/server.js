@@ -143,6 +143,15 @@ const getSimilar = async (src) => {
         console.error(e.message, e.stack)
     }))
 
+    const orgOffer = findOffer(org.offers)
+
+    //sort by price
+    if(orgOffer && list){
+        list.sort((a, b) => {
+            return (findOffer(a.offers) - orgOffer) - (findOffer(b.offers) - orgOffer);
+        });
+    }
+
     //Delete doors and seats
     if(list.length < 6){
         query = {
@@ -156,21 +165,22 @@ const getSimilar = async (src) => {
                 Limit "+12-list.length,
             values: [org.configuration.type, org.configuration.fuel, org.configuration.gear, org.configuration.critair]
         }
-        list = list.concat(await runQuery(client, query).then(result=>{
+        const lessSimilar = await runQuery(client, query).then(result=>{
             return result.rows
         }).catch(e => {
             console.error(e.message, e.stack)
-        }))
+        })
+
+        if(orgOffer && lessSimilar){
+            lessSimilar.sort((a, b) => {
+                return (findOffer(a.offers) - orgOffer) - (findOffer(b.offers) - orgOffer);
+            });
+        }
+
+        list = list.concat(lessSimilar)
     }
 
-    const orgOffer = findOffer(org.offers)
-
-    //sort by price
-    if(orgOffer && list){
-        list.sort((a, b) => {
-            return (findOffer(a.offers) - orgOffer) - (findOffer(b.offers) - orgOffer);
-        });
-    }
+    
 
     //If we have less than 3 similar vehicles, trim data to only the same type.
     if(list.length < 3){
