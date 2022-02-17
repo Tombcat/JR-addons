@@ -153,7 +153,7 @@ const getSimilar = async (src) => {
                 AND configuration->>'fuel' like $2 \
                 AND configuration->>'gear' like $3 \
                 AND configuration->>'critair' like $4 \
-                Limit 12",
+                Limit "+12-list.length,
             values: [org.configuration.type, org.configuration.fuel, org.configuration.gear, org.configuration.critair]
         }
         list = list.concat(await runQuery(client, query).then(result=>{
@@ -179,7 +179,7 @@ const getSimilar = async (src) => {
                     (SELECT last_revision FROM public.vehicles) \
                 AND status = 'available'\
                 and configuration->>'type' like $1 \
-                limit 5",
+                limit "+3-list.length,
             values: [org.configuration.type]
         }
         list = list.concat(await runQuery(client, query).then(result=>{
@@ -191,9 +191,6 @@ const getSimilar = async (src) => {
 
     client.release()
     console.log("Client disconnected")
-
-    //Trim to 12 elements
-    list = list.slice(0, 12);
 
     return {
         found: list.length,
