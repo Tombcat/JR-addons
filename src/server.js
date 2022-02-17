@@ -172,13 +172,13 @@ const getSimilar = async (src) => {
 
     //Sort result and set excluded IDS
     list = sortByPrice(list)
-    let excludedIds = excludeId(list)
 
     console.log("List Length with Similar:", list.length)
-    console.log("1nd run excluded:", excludedIds, '\n')
-
+    
     //Delete doors and seats
     if(list.length < 6){
+        let excludedIds = excludeId(list)
+        console.log("lessSimilar run excluded:", excludedIds)
         query = {
             text: "SELECT vr.* FROM public.vehicle_revisions vr WHERE id IN \
                     (SELECT last_revision FROM public.vehicles) \
@@ -200,14 +200,15 @@ const getSimilar = async (src) => {
         
         lessSimilar = sortByPrice(lessSimilar)
         list = list.concat(lessSimilar)
-        excludedIds = excludeId(list)
     }
 
     console.log("List Length with lessSimilar:", list.length)
-    console.log("2rd run excluded:", excludedIds,)
+    
 
     //If we have less than 3 similar vehicles, trim data to only the same type.
     if(list.length < 3){
+        excludedIds = excludeId(list)
+        console.log("otherVehicles run excluded:", excludedIds)
         query = {
             text: "SELECT vr.* FROM public.vehicle_revisions vr WHERE id IN \
                     (SELECT last_revision FROM public.vehicles) \
