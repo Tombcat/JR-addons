@@ -93,6 +93,125 @@ function fetchReezo(data){
     })
 }
 
+const getSimilar = async (src) => {
+
+    var client = await pool.connect()
+    console.log("Client Connected")
+
+    // prepare query to get values from original vehicle
+    let query = {
+        text: "SELECT * FROM public.vehicle_revisions WHERE id IN (SELECT last_revision FROM public.vehicles WHERE id = $1)",
+        values: [src]
+    } 
+
+    //Run query to get original car values and store it as ORG
+    const org = await runQuery(client, query).then(result=>{
+        return result.rows[0]
+    }).catch(e => {
+        console.error(e.message, e.stack)
+    })
+
+     //Find price of offer duration 12
+    const findOffer = (array)=>{
+        let offer = array.find(element => element.duration == 12)
+        if(offer){
+            return offer.price
+        }else {
+            offer = array.find(element=> element.duration == org.offers[0].duration)
+            if(offer){
+                return offer.price
+            }else return undefined
+        }
+    }
+
+    //Prepare query for a similar cars search
+    query = {
+        text: "SELECT vr.* FROM public.vehicle_revisions vr WHERE id IN \
+                (SELECT last_revision FROM public.vehicles) \
+            AND status = 'available'\
+            and configuration->>'type' like $1 \
+            AND configuration->>'doors' like $2  \
+            AND configuration->>'seats' like $3 \
+            AND configuration->>'fuel' like $4 \
+            AND configuration->>'gear' like $5 \
+            AND configuration->>'critair' like $6",
+        values: [org.configuration.type, org.configuration.doors, org.configuration.seats, org.configuration.fuel, org.configuration.gear, org.configuration.critair]
+    }
+
+    let list = []
+
+    //Run query and get a list of similar cars
+    list = list.concat(await runQuery(client, query).then(result=>{
+        return result.rows
+    }).catch(e => {
+        console.error(e.message, e.stack)
+    }))
+
+    //Delete doors and seats
+    if(list.length < 6){
+        query = {
+            text: "SELECT vr.* FROM public.vehicle_revisions vr WHERE id IN \
+                    (SELECT last_revision FROM public.vehicles) \
+                AND status = 'available'\
+                and configuration->>'type' like $1 \
+                AND configuration->>'fuel' like $2 \
+                AND configuration->>'gear' like $3 \
+                AND configuration->>'critair' like $4",
+            values: [org.configuration.type, org.configuration.fuel, org.configuration.gear, org.configuration.critair]
+        }
+        list = list.concat(await runQuery(client, query).then(result=>{
+            return result.rows
+        }).catch(e => {
+            console.error(e.message, e.stack)
+        }))
+    } 
+
+    //If we have less than 3 similar vehicles, trim data to only the same type.
+    if(list.length < 3){
+        query = {
+            text: "SELECT vr.* FROM public.vehicle_revisions vr WHERE id IN \
+                    (SELECT last_revision FROM public.vehicles) \
+                AND status = 'available'\
+                and configuration->>'type' like $1",
+            values: [org.configuration.type]
+        }
+        list = list.concat(await runQuery(client, query).then(result=>{
+            return result.rows
+        }).catch(e => {
+            console.error(e.message, e.stack)
+        }))
+    }
+
+    client.release()
+    console.log("Client disconnected")
+
+    const orgOffer = findOffer(org.offers)
+
+    //sort by price
+    if(orgOffer){
+        list.sort((a, b) => {
+            return (findOffer(a.offers) - orgOffer) - (findOffer(b.offers) - orgOffer);
+        });
+    }
+
+    //Trim to 12 elements
+    list = list.slice(0, 12);
+
+    return {
+        found: list.length,
+        rows: list
+    }
+}
+
+app.get('/similar/:id', (req, res) => {
+    console.log("Requested similar cars to id:", req.params.id)
+    getSimilar(req.params.id).then(result=>{
+        res.status(200).send(result)
+    }).catch(e => {
+        console.error(e.message, e.stack)
+    })
+})
+
 app.post('/test', (req, res) => {
     if(bussy){
         res.status(201).send("Server is currently bussy, please try again later")
