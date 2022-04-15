@@ -79,12 +79,19 @@ const looper = async function(query){
 }
 
 function fetchReezo(data){
-    return axios.get("https://gqlaws.reezocar.com/graphql", {
-        data: data
-    }).then(response=>{
+
+    const options = {
+        headers: {'Content-Type': 'application/json'}
+      };
+
+    return axios.post("https://gqlaws.reezocar.com/graphql", {
+        data
+    },options).then(response=>{
+        console.log(response)
         return response.data
     }).catch(error=>{
         console.log ("------------------- Reezo scrape error -------------------")
+        console.warn(error)
         throw new Error(error);
     })
 }
