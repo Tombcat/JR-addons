@@ -34,14 +34,15 @@ const runQuery = async function (client, query) {
 const scrapeReezo = async function(client, scrape) {
     for(const el of scrape.data.ads.ads){
         try {
+
             let query = {
                 text: "SELECT * FROM public.reezocar_scrapes WHERE brand = $1 AND model = $2 AND mileage = $3 AND price = $4 and year = $5",
                 values: [el.brand,el.model,el.mileage,el.price,el.year]
             }
         
             const length = await runQuery(client, query)
-
-            if(length !== 0) continue
+            
+            if(length.rowCount !== 0) continue
         
             query = {
                 text: "INSERT INTO reezocar_scrapes (reezo_id, title, brand, model, energy, gearbox, mileage, price, year) \
@@ -78,16 +79,17 @@ const looper = async function(query){
     return "Looper is done!"
 }
 
-function fetchReezo(data){
+function fetchReezo(query){
 
     const options = {
         headers: {'Content-Type': 'application/json'}
       };
 
+
     return axios.post("https://gqlaws.reezocar.com/graphql", {
-        data
-    },options).then(response=>{
-        console.log(response)
+        query: query.query,
+        variables: query.variables
+    }).then(response=>{
         return response.data
     }).catch(error=>{
         console.log ("------------------- Reezo scrape error -------------------")
